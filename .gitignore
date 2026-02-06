@@ -1,0 +1,21 @@
+.vscode/
+.venv/
+.env.local
+__pycache__/
+gradio_tmp/
+outputs/
+data/
+checkpoints/
+*.egg-info
+*.pyc
+body4d.yaml
+uv.lock
+save_masks.py
+save_video.py
+img_vid_concat.py
+build/
+mhr_smpl_conversion/
+
+# Large files not needed for inference
+models/diffusion_vas/models/Depth_Anything_V2/assets/teaser.png
+models/diffusion_vas/models/Depth_Anything_V2/metric_depth/dataset/

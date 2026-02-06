@@ -1,0 +1,15 @@
+.venv/
+.git/
+.env
+.env.local
+__pycache__/
+*.pyc
+outputs/
+gradio_tmp/
+data/
+checkpoints/
+*.egg-info
+build/
+.vscode/
+.claude/
+assets/examples/

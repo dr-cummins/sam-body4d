@@ -5,7 +5,6 @@ os.environ["GRADIO_TEMP_DIR"] = os.path.join(ROOT, "gradio_tmp")
 import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(current_dir, 'models', 'sam_3d_body'))
-sys.path.append(os.path.join(current_dir, 'models', 'diffusion_vas'))
 
 import uuid
 from datetime import datetime
@@ -28,6 +27,14 @@ from tqdm import tqdm
 from omegaconf import OmegaConf
 
 from utils import draw_point_marker, mask_painter, images_to_mp4, DAVIS_PALETTE, jpg_folder_to_mp4, is_super_long_or_wide, keep_largest_component, is_skinny_mask, bbox_from_mask, gpu_profile, resize_mask_with_unique_label
+
+# Add diffusion_vas to front of path AFTER importing project utils above.
+# diffusion_vas/utils.py would shadow our utils package if added earlier,
+# but sys.modules caching ensures subsequent 'from utils import ...' calls
+# still resolve to the project's utils package.
+# insert(0,...) is needed because diffusion_vas/demo.py imports from its
+# nested models/diffusion_vas/ directory via 'from models.diffusion_vas...'
+sys.path.insert(0, os.path.join(current_dir, 'models', 'diffusion_vas'))
 
 from models.sam_3d_body.sam_3d_body import load_sam_3d_body, SAM3DBodyEstimator
 from models.sam_3d_body.notebook.utils import process_image_with_mask, save_mesh_results
@@ -186,9 +193,18 @@ def get_thumb(path: str):
     return read_frame_at(path, 0)
 
 
-EX1_THUMB = get_thumb(EXAMPLE_1)
-EX2_THUMB = get_thumb(EXAMPLE_2)
-EX3_THUMB = get_thumb(EXAMPLE_3)
+_ALL_EXAMPLES = [
+    (EXAMPLE_1, "Example 1"),
+    (EXAMPLE_2, "Example 2"),
+    (EXAMPLE_3, "Example 3"),
+]
+AVAILABLE_EXAMPLES = []
+EXAMPLE_GALLERY_ITEMS = []
+for _path, _label in _ALL_EXAMPLES:
+    _thumb = get_thumb(_path)
+    if _thumb is not None:
+        AVAILABLE_EXAMPLES.append(_path)
+        EXAMPLE_GALLERY_ITEMS.append((_thumb, _label))
 
 
 # ===============================
@@ -329,19 +345,13 @@ def on_example_select(evt: gr.SelectData):
     evt.index is the clicked item index (0, 1, 2, ...).
     """
     idx = evt.index
-    if isinstance(idx, (list, tuple)):  # gallery 有时给 (row, col)
+    if isinstance(idx, (list, tuple)):
         idx = idx[0]
 
-    if idx == 0:
-        path = EXAMPLE_1
-    elif idx == 1:
-        path = EXAMPLE_2
-    elif idx == 2:
-        path = EXAMPLE_3
-    else:
+    if idx < 0 or idx >= len(AVAILABLE_EXAMPLES):
         raise gr.Error("Unknown example index.")
 
-    return prepare_video(path)
+    return prepare_video(AVAILABLE_EXAMPLES[idx])
 
 def update_frame(idx, path, fps):
     """Update current frame + time text when slider moves."""
@@ -1048,11 +1058,8 @@ with gr.Blocks(title="SAM-Body4D") as demo:
             gr.Markdown("### Example Videos")
 
             examples_gallery = gr.Gallery(
-                value=[
-                    (EX1_THUMB, "Example 1"),
-                    (EX2_THUMB, "Example 2"),
-                    (EX3_THUMB, "Example 3"),
-                ],
+                value=EXAMPLE_GALLERY_ITEMS if EXAMPLE_GALLERY_ITEMS else None,
+                visible=len(EXAMPLE_GALLERY_ITEMS) > 0,
                 show_label=False,
                 columns=3,
                 height=160,
@@ -1177,4 +1184,4 @@ with gr.Blocks(title="SAM-Body4D") as demo:
 if __name__ == "__main__":
 
     init_runtime()
-    demo.launch()
+    demo.launch(server_name="0.0.0.0", server_port=7860)

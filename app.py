@@ -27,6 +27,7 @@ from tqdm import tqdm
 from omegaconf import OmegaConf
 
 from utils import draw_point_marker, mask_painter, images_to_mp4, DAVIS_PALETTE, jpg_folder_to_mp4, is_super_long_or_wide, keep_largest_component, is_skinny_mask, bbox_from_mask, gpu_profile, resize_mask_with_unique_label
+from utils.mesh_export import PersonExportData, collect_frame_data, create_export_zip
 
 # Add diffusion_vas to front of path AFTER importing project utils above.
 # diffusion_vas/utils.py would shadow our utils package if added earlier,
@@ -843,11 +844,12 @@ def on_4d_generation(video_path: str):
 
     mhr_shape_scale_dict = {}   # each element is a list storing input parameters for mhr_forward
     obj_ratio_dict = {}         # avoid fake completion by obj ratio on the first frame
+    export_data = {}            # person_id → PersonExportData for mesh export
 
     print("Running FOV estimator ...")
     input_image = np.array(Image.open(images_list[0])).astype('uint8')
     cam_int = sam3_3d_body_model.fov_estimator.get_cam_intrinsics(input_image)
-    
+
     for i in tqdm(range(0, n, batch_size)):
         batch_images = images_list[i:i + batch_size]
         batch_masks  = masks_list[i:i + batch_size]
@@ -1021,18 +1023,37 @@ def on_4d_generation(video_path: str):
                 )
             # save mesh for individual person
             save_mesh_results(
-                outputs=mask_output, 
-                faces=sam3_3d_body_model.faces, 
+                outputs=mask_output,
+                faces=sam3_3d_body_model.faces,
                 save_dir=f"{OUTPUT_DIR}/mesh_4d_individual",
                 focal_dir = f"{OUTPUT_DIR}/focal_4d_individual",
                 image_path=image_path,
                 id_current=id_current,
             )
+            # collect per-frame data for GLB export
+            collect_frame_data(
+                export_data=export_data,
+                outputs=mask_output,
+                id_current=id_current,
+                faces=sam3_3d_body_model.faces,
+                fps=RUNTIME['video_fps'],
+            )
 
     out_4d_path = os.path.join(OUTPUT_DIR, f"4d_{time.time():.0f}.mp4")
     jpg_folder_to_mp4(f"{OUTPUT_DIR}/rendered_frames", out_4d_path, fps=RUNTIME['video_fps'])
 
-    return out_4d_path
+    # Export animated meshes as GLB
+    export_zip_path = None
+    if export_data:
+        try:
+            export_zip_path = create_export_zip(export_data, OUTPUT_DIR)
+            n_persons = len(export_data)
+            n_frames = max(len(d.vertices) for d in export_data.values())
+            print(f"[EXPORT] Created {export_zip_path} ({n_persons} person(s), {n_frames} frames)")
+        except Exception as e:
+            print(f"[EXPORT] GLB export failed: {e}")
+
+    return out_4d_path, export_zip_path
 
 
 on_mask_generation = gpu_profile(on_mask_generation)
@@ -1115,6 +1136,7 @@ with gr.Blocks(title="SAM-Body4D") as demo:
                 mask_gen_btn = gr.Button("Mask Generation")
                 gen4d_btn = gr.Button("4D Generation")
             fourd_display = gr.Video(label="4D Result")
+            export_file = gr.File(label="Download 3D Mesh (GLB)", visible=False)
 
     # ===============================
     # Event bindings
@@ -1174,10 +1196,16 @@ with gr.Blocks(title="SAM-Body4D") as demo:
         outputs=[result_display],
     )
 
+    def on_4d_generation_ui(video_path):
+        video_out, zip_path = on_4d_generation(video_path)
+        if zip_path:
+            return video_out, gr.update(value=zip_path, visible=True)
+        return video_out, gr.update(visible=False)
+
     gen4d_btn.click(
-        fn=on_4d_generation,
-        inputs=[video_state],      
-        outputs=[fourd_display],  
+        fn=on_4d_generation_ui,
+        inputs=[video_state],
+        outputs=[fourd_display, export_file],
     )
 
 

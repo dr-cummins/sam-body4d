@@ -1199,8 +1199,8 @@ with gr.Blocks(title="SAM-Body4D") as demo:
     def on_4d_generation_ui(video_path):
         video_out, zip_path = on_4d_generation(video_path)
         if zip_path:
-            return video_out, gr.update(value=zip_path, visible=True)
-        return video_out, gr.update(visible=False)
+            return video_out, gr.File(value=zip_path, visible=True)
+        return video_out, gr.File(visible=False)
 
     gen4d_btn.click(
         fn=on_4d_generation_ui,

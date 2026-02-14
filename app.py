@@ -1136,7 +1136,7 @@ with gr.Blocks(title="SAM-Body4D") as demo:
                 mask_gen_btn = gr.Button("Mask Generation")
                 gen4d_btn = gr.Button("4D Generation")
             fourd_display = gr.Video(label="4D Result")
-            export_file = gr.File(label="Download 3D Mesh (GLB)", visible=False)
+            export_file = gr.File(label="Download 3D Mesh (GLB)")
 
     # ===============================
     # Event bindings
@@ -1198,9 +1198,7 @@ with gr.Blocks(title="SAM-Body4D") as demo:
 
     def on_4d_generation_ui(video_path):
         video_out, zip_path = on_4d_generation(video_path)
-        if zip_path:
-            return video_out, gr.File(value=zip_path, visible=True)
-        return video_out, gr.File(visible=False)
+        return video_out, zip_path
 
     gen4d_btn.click(
         fn=on_4d_generation_ui,
@@ -1212,4 +1210,8 @@ with gr.Blocks(title="SAM-Body4D") as demo:
 if __name__ == "__main__":
 
     init_runtime()
-    demo.launch(server_name="0.0.0.0", server_port=7860)
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        allowed_paths=[os.path.abspath("outputs")],
+    )

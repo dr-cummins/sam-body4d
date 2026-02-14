@@ -1050,6 +1050,15 @@ def on_4d_generation(video_path: str):
             n_persons = len(export_data)
             n_frames = max(len(d.vertices) for d in export_data.values())
             print(f"[EXPORT] Created {export_zip_path} ({n_persons} person(s), {n_frames} frames)")
+            # Copy to Gradio temp dir so Gradio can serve it for download
+            import shutil
+            import tempfile
+            gradio_tmp = os.environ.get("GRADIO_TEMP_DIR", os.path.join(ROOT, "gradio_tmp"))
+            tmp_dir = tempfile.mkdtemp(dir=gradio_tmp)
+            tmp_zip = os.path.join(tmp_dir, "mesh_export.zip")
+            shutil.copy2(export_zip_path, tmp_zip)
+            export_zip_path = tmp_zip
+            print(f"[EXPORT] Copied to Gradio temp: {tmp_zip}")
         except Exception as e:
             print(f"[EXPORT] GLB export failed: {e}")
 
